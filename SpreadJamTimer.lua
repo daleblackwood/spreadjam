@@ -13,7 +13,6 @@ source_name     = ""
 duration_hours  = 24;
 text_prefix     = ""
 
-seconds_recorded = 0
 seconds_count = 0
 seconds_total   = 0
 last_text       = ""
@@ -30,6 +29,11 @@ calculating		= {}
 
 -- Function to set the time text
 function set_time_text()
+	local seconds_recorded = 0
+	for k, duration in pairs(durations) do
+		seconds_recorded = seconds_recorded + duration
+	end
+
 	count = seconds_count + seconds_recorded
 	if count_down then
 		count = seconds_total - count
@@ -62,7 +66,6 @@ function set_time_text()
 end
 
 function calculate_seconds_recorded()
-	seconds_recorded = 0 
 	local dirpath = "C:/Users/dalew/Videos/Captures"
 	local dir = obs.os_opendir(dirpath)
 	local entry
@@ -72,32 +75,65 @@ function calculate_seconds_recorded()
 			local filename = entry.d_name
 			local filepath = dirpath .. "/" .. filename
 			if is_file_video(filename) then
-				calculating[filepath] = { attempts = 0, duration = 0 }
-				local duration = calculate_video_duration(filepath)
-				seconds_recorded = seconds_recorded + duration
+				calculating[filepath] = { attempts = 0 }
 			end
 		end
 	until not entry
-	print("seconds_recorded " .. seconds_recorded)
 	obs.os_closedir(dir)
+	calculate_seconds_recorded_update()
 end
 
-function calculate_video_duration(filepath)
-	if durations[filepath] then
-		return durations[filepath]
+function calculate_seconds_recorded_update()
+	obs.timer_remove(calculate_seconds_recorded_update)
+	for filepath, info in pairs(calculating) do
+		local pending = false
+		if info then
+			if info.source then
+				-- try to read the duration
+				duration = obs.obs_source_media_get_duration(info.source)
+				if duration > 0 or info.attempts > 4 then
+					print("calculated " .. duration .. " for " .. filepath)
+					obs.obs_source_release(info.source)
+					durations[filepath] = duration
+					calculating[filepath] = nil
+				else
+					info.attempts = info.attempts + 1
+					pending = true
+				end
+			else
+				-- create a source
+				print("calculating " .. filepath .. "...")
+				info.source = obs.obs_source_create_private("ffmpeg_source", "Global Media Source", nil)
+				info.data = obs.obs_data_create()
+				obs.obs_data_set_string(s, "local_file", filepath)
+				obs.obs_source_update(info.source, info.data)
+				pending = true
+			end
+		end
+		if pending then
+			-- if we processed one, let it through
+			obs.timer_add(calculate_seconds_recorded_update, 500)
+			return
+		end
 	end
-	local duration = 0;
-	print("calculate " .. filepath)
-	local source = obs.obs_source_create_private("ffmpeg_source", "Global Media Source", nil)
-  	local s = obs.obs_data_create()
-  	obs.obs_data_set_string(s, "local_file", filepath)
-  	obs.obs_source_update(source, s)
-	obs.obs_source_update_properties(source)
-	duration = obs.obs_source_media_get_duration(source)
-	print("calculated " .. filepath .. " is " .. duration)
-	durations[filepath] = duration
-	return duration
 end
+
+-- function calculate_video_duration(filepath)
+-- 	if durations[filepath] then
+-- 		return durations[filepath]
+-- 	end
+-- 	local duration = 0;
+-- 	print("calculate " .. filepath)
+-- 	local source = obs.obs_source_create_private("ffmpeg_source", "Global Media Source", nil)
+--   	local s = obs.obs_data_create()
+--   	obs.obs_data_set_string(s, "local_file", filepath)
+--   	obs.obs_source_update(source, s)
+-- 	obs.obs_source_update_properties(source)
+-- 	duration = obs.obs_source_media_get_duration(source)
+-- 	print("calculated " .. filepath .. " is " .. duration)
+-- 	durations[filepath] = duration
+-- 	return duration
+-- end
 
 function is_file_video(filename)
 	local ext = obs.os_get_path_extension(filename)
