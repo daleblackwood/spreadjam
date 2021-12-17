@@ -92,9 +92,9 @@ function calculate_seconds_recorded_update()
 				-- try to read the duration
 				duration = obs.obs_source_media_get_duration(info.source)
 				if duration > 0 or info.attempts > 4 then
-					print("calculated " .. duration .. " for " .. filepath)
+					--print("calculated " .. duration .. " for " .. filepath)
 					obs.obs_source_release(info.source)
-					durations[filepath] = duration
+					durations[filepath] = duration / 1000
 					calculating[filepath] = nil
 				else
 					info.attempts = info.attempts + 1
@@ -102,17 +102,19 @@ function calculate_seconds_recorded_update()
 				end
 			else
 				-- create a source
-				print("calculating " .. filepath .. "...")
+				--print("calculating " .. filepath .. "...")
 				info.source = obs.obs_source_create_private("ffmpeg_source", "Global Media Source", nil)
-				info.data = obs.obs_data_create()
+				local s = obs.obs_data_create()
 				obs.obs_data_set_string(s, "local_file", filepath)
-				obs.obs_source_update(info.source, info.data)
+				obs.obs_source_update(info.source, s)
+				obs.obs_source_set_monitoring_type(info.source, obs.OBS_MONITORING_TYPE_MONITOR_AND_OUTPUT)
+  				obs.obs_data_release(s)
 				pending = true
 			end
 		end
 		if pending then
 			-- if we processed one, let it through
-			obs.timer_add(calculate_seconds_recorded_update, 500)
+			obs.timer_add(calculate_seconds_recorded_update, 10)
 			return
 		end
 	end
