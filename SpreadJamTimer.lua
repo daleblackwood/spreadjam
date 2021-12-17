@@ -25,6 +25,9 @@ hotkey_id       = obs.OBS_INVALID_HOTKEY_ID
 
 VID_EXTS		= {"mp4", "mpg", "mkv", "m4v", "mov"}
 
+durations		= {}
+calculating		= {}
+
 -- Function to set the time text
 function set_time_text()
 	count = seconds_count + seconds_recorded
@@ -60,16 +63,18 @@ end
 
 function calculate_seconds_recorded()
 	seconds_recorded = 0 
-	local dir_path = "C:/Users/dalew/Videos/Captures"
-	local dir = obs.os_opendir(dir_path)
+	local dirpath = "C:/Users/dalew/Videos/Captures"
+	local dir = obs.os_opendir(dirpath)
 	local entry
 	repeat
 		entry = obs.os_readdir(dir)
 		if entry then
 			local filename = entry.d_name
+			local filepath = dirpath .. "/" .. filename
 			if is_file_video(filename) then
-				local length = calculate_video_length(filename)
-				seconds_recorded = seconds_recorded + length
+				calculating[filepath] = { attempts = 0, duration = 0 }
+				local duration = calculate_video_duration(filepath)
+				seconds_recorded = seconds_recorded + duration
 			end
 		end
 	until not entry
@@ -77,10 +82,21 @@ function calculate_seconds_recorded()
 	obs.os_closedir(dir)
 end
 
-function calculate_video_length(filename)
-	local time = 60;
-	print(filename .. " is " .. time)
-	return 60
+function calculate_video_duration(filepath)
+	if durations[filepath] then
+		return durations[filepath]
+	end
+	local duration = 0;
+	print("calculate " .. filepath)
+	local source = obs.obs_source_create_private("ffmpeg_source", "Global Media Source", nil)
+  	local s = obs.obs_data_create()
+  	obs.obs_data_set_string(s, "local_file", filepath)
+  	obs.obs_source_update(source, s)
+	obs.obs_source_update_properties(source)
+	duration = obs.obs_source_media_get_duration(source)
+	print("calculated " .. filepath .. " is " .. duration)
+	durations[filepath] = duration
+	return duration
 end
 
 function is_file_video(filename)
