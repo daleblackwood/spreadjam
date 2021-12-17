@@ -1,9 +1,11 @@
 --[[
 Name: SpreadJam timer
 Author: Dale Williams
-Based upon Adaptive CountDown by Tormy Van Cool
 Use Case:
 	-	Timer counts down footage recorded up to 24hr
+Reasearch:
+	- 	Adaptive CountDown by Tormy Van Cool
+	- 	OBS Stats on Stream by GreenComfyTea
 ]]
 obs             = obslua
 APP_NAME        = "SpeadJam"
@@ -20,12 +22,11 @@ activated       = false
 count_down		= true
 is_recording	= false
 
-hotkey_id       = obs.OBS_INVALID_HOTKEY_ID
-
 VID_EXTS		= {"mp4", "mpg", "mkv", "m4v", "mov"}
 
 durations		= {}
 calculating		= {}
+is_calculating  = false
 
 -- Function to set the time text
 function set_time_text()
@@ -45,11 +46,21 @@ function set_time_text()
 	local minutes       = math.floor(total_minutes % 60)
 	local hours         = math.floor(total_minutes / 60)
 
-	text = string.format(text_prefix, duration_hours) .. 
+	local jam_prefix = string.format(text_prefix, duration_hours)
+
+	text = jam_prefix .. 
         string.format("%02d:%02d:%02d", hours, minutes, seconds)
 
-	if count >= seconds_total then
-        text = "Time's up!"	
+	if is_recording == false then
+		text = text .. " [paused]"
+	elseif is_calculating then
+		text = text .. " [...]"
+	end
+
+	if seconds_count == 0 and seconds_recorded == 0 then
+		text = jam_prefix .. duration_hours .. ":00:00 [ready]"	
+	elseif count >= seconds_total then
+        text = jam_prefix .. "Time up!"	
 	end
 
 	if text ~= last_text then
@@ -65,7 +76,8 @@ function set_time_text()
 	last_text = text
 end
 
-function calculate_seconds_recorded()
+function calculate_recorded()
+	is_calculating = true
 	local dirpath = "C:/Users/dalew/Videos/Captures"
 	local dir = obs.os_opendir(dirpath)
 	local entry
@@ -80,11 +92,12 @@ function calculate_seconds_recorded()
 		end
 	until not entry
 	obs.os_closedir(dir)
-	calculate_seconds_recorded_update()
+	calculate_recorded_update()
 end
 
-function calculate_seconds_recorded_update()
-	obs.timer_remove(calculate_seconds_recorded_update)
+function calculate_recorded_update()
+	is_calculating = false
+	obs.timer_remove(calculate_recorded_update)
 	for filepath, info in pairs(calculating) do
 		local pending = false
 		if info then
@@ -114,28 +127,12 @@ function calculate_seconds_recorded_update()
 		end
 		if pending then
 			-- if we processed one, let it through
-			obs.timer_add(calculate_seconds_recorded_update, 10)
+			is_calculating = true
+			obs.timer_add(calculate_recorded_update, 10)
 			return
 		end
 	end
 end
-
--- function calculate_video_duration(filepath)
--- 	if durations[filepath] then
--- 		return durations[filepath]
--- 	end
--- 	local duration = 0;
--- 	print("calculate " .. filepath)
--- 	local source = obs.obs_source_create_private("ffmpeg_source", "Global Media Source", nil)
---   	local s = obs.obs_data_create()
---   	obs.obs_data_set_string(s, "local_file", filepath)
---   	obs.obs_source_update(source, s)
--- 	obs.obs_source_update_properties(source)
--- 	duration = obs.obs_source_media_get_duration(source)
--- 	print("calculated " .. filepath .. " is " .. duration)
--- 	durations[filepath] = duration
--- 	return duration
--- end
 
 function is_file_video(filename)
 	local ext = obs.os_get_path_extension(filename)
@@ -267,13 +264,8 @@ function script_defaults(settings)
 end
 
 -- A function named script_save will be called when the script is saved
---
--- NOTE: This function is usually used for saving extra data (such as in this
--- case, a hotkey's save data).  Settings set via the properties are saved
--- automatically.
 function script_save(settings)
-	local hotkey_save_array = obs.obs_hotkey_save(hotkey_id)
-	obs.obs_data_array_release(hotkey_save_array)
+	return
 end
 
 function activate_recording(on)
@@ -281,28 +273,18 @@ function activate_recording(on)
 	obs.timer_remove(timer_callback)
 	if is_recording then
 		seconds_count = 0
-		calculate_seconds_recorded()
+		calculate_recorded()
 		obs.timer_add(timer_callback, 1000)
 	end
+	set_time_text()
 end
 
 -- a function named script_load will be called on startup
 function script_load(settings)
-	-- Connect hotkey and activation/deactivation signal callbacks
-	--
-	-- NOTE: These particular script callbacks do not necessarily have to
-	-- be disconnected, as callbacks will automatically destroy themselves
-	-- if the script is unloaded.  So there's no real need to manually
-	-- disconnect callbacks that are intended to last until the script is
-	-- unloaded.
 	local sh = obs.obs_get_signal_handler()
 	obs.signal_handler_connect(sh, "source_activate", source_activated)
 	obs.signal_handler_connect(sh, "source_deactivate", source_deactivated)
 	obs.obs_frontend_add_event_callback(on_event)
-
-	local hotkey_save_array = obs.obs_data_get_array(settings, "reset_hotkey")
-	obs.obs_hotkey_load(hotkey_id, hotkey_save_array)
-	obs.obs_data_array_release(hotkey_save_array)
 end
 
 function on_event(event)
