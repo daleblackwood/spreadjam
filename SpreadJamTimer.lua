@@ -11,7 +11,7 @@ obs             = obslua
 APP_NAME        = "SpeadJam"
 APP_VERSION     = "1.0.0"
 SOURCE_NAME 	= "SpreadJam"
-TEXT_PREFIX		= "SJ%dh ║ "
+TEXT_PREFIX		= "SJ%d  "
 VID_EXTS		= {"mp4", "mpg", "mkv", "m4v", "mov"}
 ALIGN_CENTER 	= 0
 ALIGN_LEFT		= 1
@@ -67,15 +67,17 @@ function update_display()
 	if output_path == nil then
 		text = t_prefix .. "Error: Please set recording output path."
 	elseif seconds_count == 0 and seconds_recorded == 0 then
-		text = t_prefix .. duration_hours .. ":00:00 [ready]"	
+		text = t_prefix  .. duration_hours .. ":00:00"	
 	elseif timer_seconds >= seconds_total then
-        text = t_prefix .. "Time up!"	
+        text = t_prefix .. "■   TIME!"	
 	else
 		text = t_prefix .. string.format("%02d:%02d:%02d", t_hours, t_minutes, t_seconds)
 		if is_recording == false then
-			text = text .. " [paused]"
+			text = text .. "  II"
 		elseif is_calculating then
-			text = text .. " [...]"
+			text = text .. "  ○"
+		elseif math.floor(t_seconds / 2) == t_seconds / 2 then
+			text = text .. "  ●"
 		end
 	end
 
