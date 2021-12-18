@@ -24,12 +24,14 @@ SIZE_LARGE		= 150
 SIZE_HUGE		= 200
 
 duration_hours  = 24;
-text_prefix     = ""
-
 seconds_count = 0
 seconds_total   = 0
 count_down		= true
 is_recording	= false
+align_h			= ALIGN_LEFT
+align_v			= ALIGN_BOTTOM
+size			= SIZE_MEDIUM
+enabled			= true
 
 durations		= {}
 calculating		= {}
@@ -38,10 +40,6 @@ config			= {}
 output_path		= nil
 dim_width		= 0
 dim_height		= 0
-align_h			= ALIGN_LEFT
-align_v			= ALIGN_BOTTOM
-size			= SIZE_MEDIUM
-enabled			= true
 
 -- Function to set the time text
 function update_display()
@@ -65,7 +63,7 @@ function update_display()
 	local total_minutes = math.floor(timer_seconds / 60)
 	local t_minutes     = math.floor(total_minutes % 60)
 	local t_hours       = math.floor(total_minutes / 60)
-	local t_prefix 	    = string.format(text_prefix, duration_hours)
+	local t_prefix 	    = string.format(TEXT_PREFIX, duration_hours)
 	if output_path == nil then
 		text = t_prefix .. "Error: Please set recording output path."
 	elseif seconds_count == 0 and seconds_recorded == 0 then
@@ -116,7 +114,7 @@ function update_display()
 	obs.obs_sceneitem_set_locked(scene_item, true)
 	obs.obs_sceneitem_set_alignment(scene_item, bit.bor(align_h, align_v))
 	local pos = obs.vec2()
-	local pad = math.ceil(dim_min * 0.05)
+	local pad = math.ceil(dim_min * 0.03)
 	local posx = pad
 	if align_h == ALIGN_CENTER then
 		posx = dim_width * 0.5
@@ -150,9 +148,10 @@ end
 function script_properties()
 	local props = obs.obs_properties_create()
 
-    local o_hours = obs.obs_properties_add_list(props, "hours", "Jam Hours (Duration)", obs.OBS_COMBO_TYPE_LIST, obs.OBS_COMBO_FORMAT_INT)
-	obs.obs_property_list_add_int(o_hours, "Full 24h", 24)
-    obs.obs_property_list_add_int(o_hours, "Mini 12h", 12)
+    local o_hours = obs.obs_properties_add_list(props, "hours", "Jam Hours", obs.OBS_COMBO_TYPE_LIST, obs.OBS_COMBO_FORMAT_INT)
+	obs.obs_property_list_add_int(o_hours, "Full 24 Hour", 24)
+    obs.obs_property_list_add_int(o_hours, "Mini 12 Hour", 12)
+    obs.obs_property_list_add_int(o_hours, "Prep 6 Hour", 6)
 
 	local o_align_h = obs.obs_properties_add_list(props, "align_h", "Position Horizontal", obs.OBS_COMBO_TYPE_LIST, obs.OBS_COMBO_FORMAT_INT)
 	obs.obs_property_list_add_int(o_align_h, "Left", ALIGN_LEFT)
@@ -170,7 +169,6 @@ function script_properties()
 	obs.obs_property_list_add_int(o_size, "Large", SIZE_LARGE)
 	obs.obs_property_list_add_int(o_size, "Huge", SIZE_HUGE)
 
-	obs.obs_properties_add_text(props, "text_prefix", "Prefix", obs.OBS_TEXT_DEFAULT)
 	obs.obs_properties_add_bool(props, "count_down", "Count Down")
 	obs.obs_properties_add_bool(props, "enabled", "Enabled")
 
@@ -180,7 +178,7 @@ end
 -- A function named script_description returns the description shown to
 -- the user
 function script_description()
-	return APP_NAME .. " " .. APP_VERSION .. "\n\n" ..
+	return APP_NAME .. " " .. APP_VERSION .. "\nBy Dale Blackwood\n\n" ..
         "Counts video footage for a gamejam until the limit is reached."
 end
 
@@ -188,7 +186,6 @@ end
 function script_update(settings)
     duration_hours = obs.obs_data_get_int(settings, "hours")
 	seconds_total = duration_hours * 60 * 60
-    text_prefix = obs.obs_data_get_string(settings, "text_prefix")
 	align_h = obs.obs_data_get_int(settings, "align_h")
 	align_v = obs.obs_data_get_int(settings, "align_v")
 	size = obs.obs_data_get_int(settings, "size")
@@ -200,7 +197,6 @@ end
 -- A function named script_defaults will be called to set the default settings
 function script_defaults(settings)
 	obs.obs_data_set_default_int(settings, "hours", 24)
-    obs.obs_data_set_default_string(settings, "text_prefix", TEXT_PREFIX)
 	obs.obs_data_set_default_int(settings, "align_h", ALIGN_LEFT)
 	obs.obs_data_set_default_int(settings, "align_v", ALIGN_BOTTOM)
 	obs.obs_data_set_default_int(settings, "size", SIZE_MEDIUM)
@@ -234,11 +230,13 @@ function script_load(settings)
 	update_display()
 end
 
-function on_event(event)
-	if event == obs.OBS_FRONTEND_EVENT_RECORDING_STARTED then
+function on_event(e)
+	if e == obs.OBS_FRONTEND_EVENT_RECORDING_STARTED then
 		activate_recording(true)
-	elseif event == obs.OBS_FRONTEND_EVENT_RECORDING_STOPPED then
+	elseif e == obs.OBS_FRONTEND_EVENT_RECORDING_STOPPED then
 		activate_recording(false)
+	elseif e == obs.OBS_FRONTEND_EVENT_SCENE_CHANGED then
+		update_display()
 	end
 end
 
