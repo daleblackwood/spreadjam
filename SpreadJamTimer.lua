@@ -10,8 +10,9 @@ Reasearch:
 obs             = obslua
 APP_NAME        = "SpeadJam"
 APP_VERSION     = "1.0.0"
+SOURCE_NAME 	= "SpreadJam"
+VID_EXTS		= {"mp4", "mpg", "mkv", "m4v", "mov"}
 
-source_name     = ""
 duration_hours  = 24;
 text_prefix     = ""
 
@@ -22,42 +23,47 @@ activated       = false
 count_down		= true
 is_recording	= false
 
-VID_EXTS		= {"mp4", "mpg", "mkv", "m4v", "mov"}
-
 durations		= {}
 calculating		= {}
 is_calculating  = false
 config			= {}
 output_path		= nil
+dim_width		= 0
+dim_height		= 0
+
+ALIGN_CENTER 	= 0
+ALIGN_LEFT		= 1
+ALIGN_RIGHT		= 2
+ALIGN_TOP		= 4
+ALIGN_BOTTOM	= 8
 
 -- Function to set the time text
-function set_time_text()
+function update_display()
+	-- calculate display seconds
 	local seconds_recorded = 0
 	for k, duration in pairs(durations) do
 		seconds_recorded = seconds_recorded + duration
 	end
-
-	count = seconds_count + seconds_recorded
+	timer_seconds = seconds_count + seconds_recorded
 	if count_down then
-		count = seconds_total - count
+		timer_seconds = seconds_total - timer_seconds
 	end
 
+	-- determine text to display
 	local text = ''
-	local seconds       = math.floor(count % 60)
-	local total_minutes = math.floor(count / 60)
-	local minutes       = math.floor(total_minutes % 60)
-	local hours         = math.floor(total_minutes / 60)
-
-	local jam_prefix = string.format(text_prefix, duration_hours)
-
+	local t_seconds     = math.floor(timer_seconds % 60)
+	local total_minutes = math.floor(timer_seconds / 60)
+	local t_minutes     = math.floor(total_minutes % 60)
+	local t_hours       = math.floor(total_minutes / 60)
+	local t_prefix 	    = string.format(text_prefix, duration_hours)
 	if output_path == nil then
-		text = jam_prefix .. "Error: Please set recording output path."
+		text = t_prefix .. "Error: Please set recording output path."
 	elseif seconds_count == 0 and seconds_recorded == 0 then
-		text = jam_prefix .. duration_hours .. ":00:00 [ready]"	
-	elseif count >= seconds_total then
-        text = jam_prefix .. "Time up!"	
+		text = t_prefix .. duration_hours .. ":00:00 [ready]"	
+	elseif timer_seconds >= seconds_total then
+        text = t_prefix .. "Time up!"	
 	else
-		text = jam_prefix .. string.format("%02d:%02d:%02d", hours, minutes, seconds)
+		text = t_prefix .. string.format("%02d:%02d:%02d", t_hours, t_minutes, t_seconds)
 		if is_recording == false then
 			text = text .. " [paused]"
 		elseif is_calculating then
@@ -66,16 +72,129 @@ function set_time_text()
 	end
 
 	if text ~= last_text then
-		local source = obs.obs_get_source_by_name(source_name)
-		if source ~= nil then
-			local settings = obs.obs_data_create()
-			obs.obs_data_set_string(settings, "text", text)
-			obs.obs_source_update(source, settings)
-			obs.obs_data_release(settings)
-			obs.obs_source_release(source)
+		-- set data
+		local s = obs.obs_data_create()
+		obs.obs_data_set_string(s, "text", text)
+
+		local dim_min = math.min(dim_height, dim_width)
+
+		-- update font		
+		local font = obs.obs_data_create()
+		local font_size = math.ceil(dim_min * 0.04)
+		obs.obs_data_set_string(font, "face", "Arial")
+		obs.obs_data_set_int(font, "size", font_size)
+		obs.obs_data_set_obj(s, "font", font)
+		obs.obs_data_set_int(s, "color", 0xFFFFFFFF)
+
+		-- get or update source
+		local source = obs.obs_get_source_by_name(SOURCE_NAME)
+		if source == nil then
+			source = obs.obs_source_create("text_gdiplus", SOURCE_NAME, s, nil)
+		else
+			obs.obs_source_update(source, s)
 		end
+
+		-- confirm or add to scene
+		local scene_source = obs.obs_frontend_get_current_scene()
+		local scene = obs.obs_scene_from_source(scene_source)
+		local scene_item = obs.obs_scene_sceneitem_from_source(scene, source)
+		if scene_item == nil then
+			scene_item = obs.obs_scene_add(scene, source)
+		end
+
+		-- position
+		obs.obs_sceneitem_set_order(scene_item, obs.OBS_ORDER_MOVE_TOP)
+		obs.obs_sceneitem_set_locked(scene_item, true)
+		obs.obs_sceneitem_set_alignment(scene_item, bit.bor(ALIGN_LEFT, ALIGN_BOTTOM))
+		local pos = obs.vec2()
+		local pad = math.ceil(dim_min * 0.05)
+		obs.vec2_set(pos, pad, dim_height - pad)
+		obs.obs_sceneitem_set_pos(scene_item, pos)
+
+		-- release
+		obs.obs_source_release(source)
+		obs.obs_data_release(s)
+		obs.obs_data_release(font)
 	end
 	last_text = text
+end
+
+function timer_callback()
+	if is_recording then
+		seconds_count = seconds_count + 1
+	end
+	update_display()
+end
+
+-- A function named script_properties defines the properties that the user
+-- can change for the entire script module itself
+function script_properties()
+	local props = obs.obs_properties_create()
+
+    local f = obs.obs_properties_add_list(props, "hours", "Hours", obs.OBS_COMBO_TYPE_LIST, obs.OBS_COMBO_FORMAT_INT)
+	obs.obs_property_list_add_int(f, "Full 24h", 24)
+    obs.obs_property_list_add_int(f, "Mini 12h", 12)
+
+	obs.obs_properties_add_text(props, "text_prefix", "Prefix", obs.OBS_TEXT_DEFAULT)
+	obs.obs_properties_add_bool(props, "count_down", "Count Down")
+
+	return props
+end
+
+-- A function named script_description returns the description shown to
+-- the user
+function script_description()
+	return APP_NAME .. " " .. APP_VERSION .. "\n\n" ..
+        "Counts video footage for a gamejam until the limit is reached."
+end
+
+-- A function named script_update will be called when settings are changed
+function script_update(settings)
+    duration_hours = obs.obs_data_get_int(settings, "hours")
+	seconds_total = duration_hours * 60 * 60
+    text_prefix = obs.obs_data_get_string(settings, "text_prefix")
+	count_down = obs.obs_data_get_bool(settings, "count_down")
+end
+
+-- A function named script_defaults will be called to set the default settings
+function script_defaults(settings)
+	obs.obs_data_set_default_int(settings, "hours", 24)
+    obs.obs_data_set_default_string(settings, "text_prefix", "SJ%dh ║ ")
+    obs.obs_data_set_default_bool(settings, "count_down", true)
+end
+
+-- A function named script_save will be called when the script is saved
+function script_save(settings)
+	return
+end
+
+function activate_recording(on)
+	is_recording = on
+	obs.timer_remove(timer_callback)
+	if is_recording then
+		seconds_count = 0
+		load_config()
+		if output_path then
+			calculate_recorded()
+			obs.timer_add(timer_callback, 1000)
+		end
+	end
+	update_display()
+end
+
+-- a function named script_load will be called on startup
+function script_load(settings)
+	obs.obs_frontend_add_event_callback(on_event)
+	load_config()
+	update_display()
+end
+
+function on_event(event)
+	if event == obs.OBS_FRONTEND_EVENT_RECORDING_STARTED then
+		activate_recording(true)
+	elseif event == obs.OBS_FRONTEND_EVENT_RECORDING_STOPPED then
+		activate_recording(false)
+	end
 end
 
 function calculate_recorded()
@@ -108,6 +227,7 @@ function calculate_recorded_update()
 				if duration > 0 or info.attempts > 4 then
 					--print("calculated " .. duration .. " for " .. filepath)
 					obs.obs_source_release(info.source)
+					info.source = nil
 					durations[filepath] = duration / 1000
 					calculating[filepath] = nil
 				else
@@ -150,159 +270,6 @@ function is_file_video(filename)
 	return false
 end
 
-function timer_callback()
-	if is_recording then
-		seconds_count = seconds_count + 1
-	end
-
-	if activated then
-		set_time_text()
-	end
-end
-
-function activate(activating)
-	if activated == activating then
-		return
-	end
-
-	activated = activating
-
-	if activating then
-		set_time_text()
-	end
-end
-
--- Called when a source is activated/deactivated
-function activate_signal(cd, activating)
-	local source = obs.calldata_source(cd, "source")
-	if source ~= nil then
-		local name = obs.obs_source_get_name(source)
-		if (name == source_name) then
-			activate(activating)
-		end
-	end
-end
-
-function source_activated(cd)
-	activate_signal(cd, true)
-end
-
-function source_deactivated(cd)
-	activate_signal(cd, false)
-end
-
-function reset(pressed)
-	if not pressed then
-		return
-	end
-
-	activate(false)
-	local source = obs.obs_get_source_by_name(source_name)
-	if source == nil then
-		source = obs.obs_source_create("text_gdiplus", "SpreadJam Counter")
-		obs.obs_register_source(source)
-	end
-	if source ~= nil then
-		local active = obs.obs_source_active(source)
-		obs.obs_source_release(source)
-		activate(active)
-	end
-end
-
-----------------------------------------------------------
-
--- A function named script_properties defines the properties that the user
--- can change for the entire script module itself
-function script_properties()
-	local props = obs.obs_properties_create()
-	local p = obs.obs_properties_add_list(props, "source", "Timer Source", obs.OBS_COMBO_TYPE_EDITABLE, obs.OBS_COMBO_FORMAT_STRING)
-	local sources = obs.obs_enum_sources()
-	if sources ~= nil then
-		for _, source in ipairs(sources) do
-			source_id = obs.obs_source_get_unversioned_id(source)
-			if source_id == "text_gdiplus" or source_id == "text_ft2_source" then
-				local name = obs.obs_source_get_name(source)
-				obs.obs_property_list_add_string(p, name, name)
-			end
-		end
-	end
-	obs.source_list_release(sources)
-
-    local f = obs.obs_properties_add_list(props, "hours", "Hours", obs.OBS_COMBO_TYPE_LIST, obs.OBS_COMBO_FORMAT_INT)
-	obs.obs_property_list_add_int(f, "Full 24h", 24)
-    obs.obs_property_list_add_int(f, "Mini 12h", 12)
-
-	obs.obs_properties_add_text(props, "text_prefix", "Prefix", obs.OBS_TEXT_DEFAULT)
-	obs.obs_properties_add_bool(props, "count_down", "Count Down")
-
-	return props
-end
-
--- A function named script_description returns the description shown to
--- the user
-function script_description()
-	return APP_NAME .. " " .. APP_VERSION .. "\n\n" ..
-        "Counts video footage for a gamejam until the limit is reached."
-end
-
--- A function named script_update will be called when settings are changed
-function script_update(settings)
-	activate(false)
-    duration_hours = obs.obs_data_get_int(settings, "hours")
-	seconds_total = (duration_hours*60*60) + (obs.obs_data_get_int(settings, "minutes")*60) + obs.obs_data_get_int(settings, "seconds")
-	source_name = obs.obs_data_get_string(settings, "source")
-    text_prefix = obs.obs_data_get_string(settings, "text_prefix")
-	count_down = obs.obs_data_get_bool(settings, "count_down")
-	reset(true)
-end
-
--- A function named script_defaults will be called to set the default settings
-function script_defaults(settings)
-	obs.obs_data_set_default_int(settings, "hours", 24)
-	obs.obs_data_set_default_int(settings, "minutes", 0)
-	obs.obs_data_set_default_int(settings, "seconds", 0)
-    obs.obs_data_set_default_string(settings, "text_prefix", "SJ%dh ║ ")
-    obs.obs_data_set_default_bool(settings, "count_down", true)
-end
-
--- A function named script_save will be called when the script is saved
-function script_save(settings)
-	return
-end
-
-function activate_recording(on)
-	is_recording = on
-	obs.timer_remove(timer_callback)
-	if is_recording then
-		seconds_count = 0
-		load_config()
-		if output_path then
-			calculate_recorded()
-			obs.timer_add(timer_callback, 1000)
-		end
-	end
-	set_time_text()
-end
-
--- a function named script_load will be called on startup
-function script_load(settings)
-	local sh = obs.obs_get_signal_handler()
-	obs.signal_handler_connect(sh, "source_activate", source_activated)
-	obs.signal_handler_connect(sh, "source_deactivate", source_deactivated)
-	obs.obs_frontend_add_event_callback(on_event)
-	
-	load_config()
-	set_time_text()
-end
-
-function on_event(event)
-	if event == obs.OBS_FRONTEND_EVENT_RECORDING_STARTED then
-		activate_recording(true)
-	elseif event == obs.OBS_FRONTEND_EVENT_RECORDING_STOPPED then
-		activate_recording(false)
-	end
-end
-
 function load_config()
 	config = {}
 	local profile = obs.obs_frontend_get_current_profile():gsub("[^%w_ ]", ""):gsub("%s", "_");
@@ -336,4 +303,18 @@ function load_config()
 		end
 	end
 	output_path = config["SimpleOutput.FilePath"]
+	local res = config["RecRescaleRes"]
+	if res ~= nil then
+		local xi = string.find(res, 'x')
+		if xi > 0 then
+			dim_width = tonumber(string.sub(0, xi))
+			dim_height = tonumber(string.sub(xi + 1))
+		else
+			res = nil
+		end
+	end
+	if res == nil then
+		dim_width = 1920
+		dim_height = 1080
+	end
 end
