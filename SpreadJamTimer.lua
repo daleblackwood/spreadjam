@@ -27,6 +27,8 @@ VID_EXTS		= {"mp4", "mpg", "mkv", "m4v", "mov"}
 durations		= {}
 calculating		= {}
 is_calculating  = false
+config			= {}
+output_path		= nil
 
 -- Function to set the time text
 function set_time_text()
@@ -48,19 +50,19 @@ function set_time_text()
 
 	local jam_prefix = string.format(text_prefix, duration_hours)
 
-	text = jam_prefix .. 
-        string.format("%02d:%02d:%02d", hours, minutes, seconds)
-
-	if is_recording == false then
-		text = text .. " [paused]"
-	elseif is_calculating then
-		text = text .. " [...]"
-	end
-
-	if seconds_count == 0 and seconds_recorded == 0 then
+	if output_path == nil then
+		text = jam_prefix .. "Error: Please set recording output path."
+	elseif seconds_count == 0 and seconds_recorded == 0 then
 		text = jam_prefix .. duration_hours .. ":00:00 [ready]"	
 	elseif count >= seconds_total then
         text = jam_prefix .. "Time up!"	
+	else
+		text = jam_prefix .. string.format("%02d:%02d:%02d", hours, minutes, seconds)
+		if is_recording == false then
+			text = text .. " [paused]"
+		elseif is_calculating then
+			text = text .. " [...]"
+		end
 	end
 
 	if text ~= last_text then
@@ -78,14 +80,13 @@ end
 
 function calculate_recorded()
 	is_calculating = true
-	local dirpath = "C:/Users/dalew/Videos/Captures"
-	local dir = obs.os_opendir(dirpath)
+	local dir = obs.os_opendir(output_path)
 	local entry
 	repeat
 		entry = obs.os_readdir(dir)
 		if entry then
 			local filename = entry.d_name
-			local filepath = dirpath .. "/" .. filename
+			local filepath = output_path .. "/" .. filename
 			if is_file_video(filename) then
 				calculating[filepath] = { attempts = 0 }
 			end
@@ -197,6 +198,10 @@ function reset(pressed)
 
 	activate(false)
 	local source = obs.obs_get_source_by_name(source_name)
+	if source == nil then
+		source = obs.obs_source_create("text_gdiplus", "SpreadJam Counter")
+		obs.obs_register_source(source)
+	end
 	if source ~= nil then
 		local active = obs.obs_source_active(source)
 		obs.obs_source_release(source)
@@ -228,7 +233,6 @@ function script_properties()
     obs.obs_property_list_add_int(f, "Mini 12h", 12)
 
 	obs.obs_properties_add_text(props, "text_prefix", "Prefix", obs.OBS_TEXT_DEFAULT)
-
 	obs.obs_properties_add_bool(props, "count_down", "Count Down")
 
 	return props
@@ -244,13 +248,11 @@ end
 -- A function named script_update will be called when settings are changed
 function script_update(settings)
 	activate(false)
-
     duration_hours = obs.obs_data_get_int(settings, "hours")
 	seconds_total = (duration_hours*60*60) + (obs.obs_data_get_int(settings, "minutes")*60) + obs.obs_data_get_int(settings, "seconds")
 	source_name = obs.obs_data_get_string(settings, "source")
     text_prefix = obs.obs_data_get_string(settings, "text_prefix")
 	count_down = obs.obs_data_get_bool(settings, "count_down")
-
 	reset(true)
 end
 
@@ -273,8 +275,11 @@ function activate_recording(on)
 	obs.timer_remove(timer_callback)
 	if is_recording then
 		seconds_count = 0
-		calculate_recorded()
-		obs.timer_add(timer_callback, 1000)
+		load_config()
+		if output_path then
+			calculate_recorded()
+			obs.timer_add(timer_callback, 1000)
+		end
 	end
 	set_time_text()
 end
@@ -285,6 +290,9 @@ function script_load(settings)
 	obs.signal_handler_connect(sh, "source_activate", source_activated)
 	obs.signal_handler_connect(sh, "source_deactivate", source_deactivated)
 	obs.obs_frontend_add_event_callback(on_event)
+	
+	load_config()
+	set_time_text()
 end
 
 function on_event(event)
@@ -293,4 +301,39 @@ function on_event(event)
 	elseif event == obs.OBS_FRONTEND_EVENT_RECORDING_STOPPED then
 		activate_recording(false)
 	end
+end
+
+function load_config()
+	config = {}
+	local profile = obs.obs_frontend_get_current_profile():gsub("[^%w_ ]", ""):gsub("%s", "_");
+	local profile_relative_path = "obs-studio\\basic\\profiles\\" .. profile .. "\\basic.ini";
+	-- char dst[512];
+	local profile_path = "                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                ";
+	obs.os_get_abs_path("..\\..\\config\\" .. profile_relative_path, profile_path, #profile_path);
+	if not obs.os_file_exists(profile_path) then	
+		obs.os_get_config_path(profile_path, #profile_path, profile_relative_path);
+		if not obs.os_file_exists(profile_path) then	
+			print("Config file not found.");
+			return;
+		end
+	end
+	local config_text = obs.os_quick_read_utf8_file(profile_path);
+	if config_text == nil then 
+		print("Couldn't read config file.");
+		return;
+	end
+	local section;
+	for line in config_text:gmatch("[^\r\n]+") do
+		local section_match = line:match('^%[([^%[%]]+)%]$')
+		if section_match then
+			section = section_match
+		else
+			local key, value = line:match('^([%w|_]+)%s-=%s-(.+)$')
+			if key and value ~= nil then
+				local config_key = section .. "." .. key
+				config[config_key] = value
+			end
+		end
+	end
+	output_path = config["SimpleOutput.FilePath"]
 end
