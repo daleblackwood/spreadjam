@@ -7,13 +7,15 @@
 
 A SpreadJam is a game jam taken over multiple sittings. Unlike the popular and traditional 48 hour game jams (like the Ludam Dare or the GMTK Jam), SpreadJams are not contigious and allow free time for time away from game production - time for ideation, experimentation, eating, sleeping, a day job - whatever you like.
 
-As a trade off, the total number of hours in a SpreadJam is half that of a traditional challenge, running at 24 just hours. The theory is that a developer with a sound mind, free mind and all the spare time in the world to think, can probably jam a great game too.
+As a trade off, the total number of hours in a SpreadJam is half that of a traditional challenge, running at 24 just hours. For a developer with a relaxed mind and all the time in the world to ponder and experiment, that should be enough to get an idea going.
 
-In order to do a SpreadJam, grab the tools here and follow the rules below. Anyone can do it at any time.
+In order to do a SpreadJam, grab the tools here and follow the rules below. Anyone can do it at any time as much as they want.
 
 ## Why is a SpreadJam?
 
 Game jams can be a lot of fun but the commitment can be daunting and the endless, sleepless rush can promote crunch, a practice the games industry is already too comfortable with. SpreadJams are a way for busy or conscientious developers to join in on the fun responsibly, at their own pace.
+
+Or perhaps it's just a convenient way to timebox prototypes. Regulation and time contraints can lead to interesting ideas and trade-offs.
 
 ## SpreadJam Rules
 
