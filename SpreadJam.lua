@@ -8,7 +8,7 @@ Reasearch:
 	- 	OBS Stats on Stream by GreenComfyTea
 ]]
 obs             = obslua
-APP_NAME        = "SpeadJam"
+APP_NAME        = "SpreadJam"
 APP_VERSION     = "1.0.0"
 SOURCE_NAME 	= "SpreadJam"
 TEXT_PREFIX		= "SJ%d  "
@@ -26,12 +26,13 @@ SIZE_HUGE		= 200
 duration_hours  = 24;
 seconds_count = 0
 seconds_total   = 0
-count_down		= true
+count_down		= false
 is_recording	= false
 align_h			= ALIGN_LEFT
 align_v			= ALIGN_BOTTOM
 size			= SIZE_MEDIUM
 enabled			= true
+auto_add		= true
 
 durations		= {}
 calculating		= {}
@@ -40,10 +41,33 @@ config			= {}
 output_path		= nil
 dim_width		= 0
 dim_height		= 0
+last_enabled 	= false
+has_exited		= false
+
+local description = [[
+<center>
+	<h2>]] .. APP_NAME .. [[ ]] .. APP_VERSION .. [[</h2>
+	<h4>By Dale Blackwood</h4>
+<p>Counts video footage for a gamejam until the limit is reached.</p>
+<p><a href='https://github.com/daleblackwood/spreadjam'>Rules and Information</a></p>
+</center>
+]]
+
+function script_description()
+	return description
+end
 
 -- Function to set the time text
 function update_display()
+	if has_exited then
+		return
+	end
+	local was_last_enabled = last_enabled
+	last_enabled = enabled
 	if enabled == false then
+		if was_last_enabled then
+			remove_all()
+		end
 		return
 	end
 
@@ -82,60 +106,64 @@ function update_display()
 	end
 
 	-- set data
-	local s = obs.obs_data_create()
-	obs.obs_data_set_string(s, "text", text)
+	local text_data = obs.obs_data_create()
+	obs.obs_data_set_string(text_data, "text", text)
 
 	local dim_min = math.min(dim_height, dim_width)
 
 	-- update font		
-	local font = obs.obs_data_create()
+	local font_data = obs.obs_data_create()
 	local font_size = math.ceil(dim_min * 0.04 * size * 0.01)
-	obs.obs_data_set_string(font, "face", "Arial")
-	obs.obs_data_set_int(font, "size", font_size)
-	obs.obs_data_set_obj(s, "font", font)
-	obs.obs_data_set_int(s, "color", 0xFFFFFFFF)
+	obs.obs_data_set_string(font_data, "face", "Arial")
+	obs.obs_data_set_int(font_data, "size", font_size)
+	obs.obs_data_set_obj(text_data, "font", font_data)
+	obs.obs_data_set_int(text_data, "color", 0xFFFFFFFF)
 
 	-- get or update source
 	local source = obs.obs_get_source_by_name(SOURCE_NAME)
 	if source == nil then
-		source = obs.obs_source_create("text_gdiplus", SOURCE_NAME, s, nil)
+		source = obs.obs_source_create("text_gdiplus", SOURCE_NAME, text_data, nil)
 	else
-		obs.obs_source_update(source, s)
+		obs.obs_source_update(source, text_data)
 	end
 
 	-- confirm or add to scene
 	local scene_source = obs.obs_frontend_get_current_scene()
 	local scene = obs.obs_scene_from_source(scene_source)
 	local scene_item = obs.obs_scene_sceneitem_from_source(scene, source)
-	if scene_item == nil then
+	if scene_item == nil and auto_add then
 		scene_item = obs.obs_scene_add(scene, source)
 	end
 
-	-- position
-	obs.obs_sceneitem_set_order(scene_item, obs.OBS_ORDER_MOVE_TOP)
-	obs.obs_sceneitem_set_locked(scene_item, true)
-	obs.obs_sceneitem_set_alignment(scene_item, bit.bor(align_h, align_v))
-	local pos = obs.vec2()
-	local pad = math.ceil(dim_min * 0.03)
-	local posx = pad
-	if align_h == ALIGN_CENTER then
-		posx = dim_width * 0.5
-	elseif align_h == ALIGN_RIGHT then
-		posx = dim_width - pad
+	if scene_item ~= nil then
+		-- position
+		obs.obs_sceneitem_set_order(scene_item, obs.OBS_ORDER_MOVE_TOP)
+		obs.obs_sceneitem_set_locked(scene_item, true)
+		obs.obs_sceneitem_set_alignment(scene_item, bit.bor(align_h, align_v))
+		local pos = obs.vec2()
+		local pad = math.ceil(dim_min * 0.03)
+		local posx = pad
+		if align_h == ALIGN_CENTER then
+			posx = dim_width * 0.5
+		elseif align_h == ALIGN_RIGHT then
+			posx = dim_width - pad
+		end
+		local posy = pad
+		if align_v == ALIGN_CENTER then
+			posy = dim_height * 0.5
+		elseif align_v == ALIGN_BOTTOM then
+			posy = dim_height - pad
+		end
+		obs.vec2_set(pos, posx, posy)
+		obs.obs_sceneitem_set_pos(scene_item, pos)
 	end
-	local posy = pad
-	if align_v == ALIGN_CENTER then
-		posy = dim_height * 0.5
-	elseif align_v == ALIGN_BOTTOM then
-		posy = dim_height - pad
-	end
-	obs.vec2_set(pos, posx, posy)
-	obs.obs_sceneitem_set_pos(scene_item, pos)
 
 	-- release
-	obs.obs_source_release(source)
-	obs.obs_data_release(s)
-	obs.obs_data_release(font)
+	if source ~= nil then
+		obs.obs_source_release(source)
+	end
+	obs.obs_data_release(text_data)
+	obs.obs_data_release(font_data)
 end
 
 function timer_callback()
@@ -172,16 +200,10 @@ function script_properties()
 	obs.obs_property_list_add_int(o_size, "Huge", SIZE_HUGE)
 
 	obs.obs_properties_add_bool(props, "count_down", "Count Down")
+	obs.obs_properties_add_bool(props, "auto_add", "Automatically Add")
 	obs.obs_properties_add_bool(props, "enabled", "Enabled")
 
 	return props
-end
-
--- A function named script_description returns the description shown to
--- the user
-function script_description()
-	return APP_NAME .. " " .. APP_VERSION .. "\nBy Dale Blackwood\n\n" ..
-        "Counts video footage for a gamejam until the limit is reached."
 end
 
 -- A function named script_update will be called when settings are changed
@@ -193,6 +215,7 @@ function script_update(settings)
 	size = obs.obs_data_get_int(settings, "size")
 	count_down = obs.obs_data_get_bool(settings, "count_down")
 	enabled = obs.obs_data_get_bool(settings, "enabled")
+	auto_add = obs.obs_data_get_bool(settings, "auto_add")
 	update_display()
 end
 
@@ -202,13 +225,14 @@ function script_defaults(settings)
 	obs.obs_data_set_default_int(settings, "align_h", ALIGN_LEFT)
 	obs.obs_data_set_default_int(settings, "align_v", ALIGN_BOTTOM)
 	obs.obs_data_set_default_int(settings, "size", SIZE_MEDIUM)
-    obs.obs_data_set_default_bool(settings, "count_down", true)
+    obs.obs_data_set_default_bool(settings, "count_down", false)
     obs.obs_data_set_default_bool(settings, "enabled", true)
+    obs.obs_data_set_default_bool(settings, "auto_add", true)
 end
 
 -- A function named script_save will be called when the script is saved
 function script_save(settings)
-	return
+	return settings
 end
 
 function activate_recording(on)
@@ -239,6 +263,11 @@ function on_event(e)
 		activate_recording(false)
 	elseif e == obs.OBS_FRONTEND_EVENT_SCENE_CHANGED then
 		update_display()
+	elseif e == obs.OBS_FRONTEND_EVENT_PROFILE_CHANGED then
+		load_config()
+		update_display()
+	elseif e == obs.OBS_FRONTEND_EVENT_EXIT then
+		on_exit()
 	end
 end
 
@@ -261,12 +290,15 @@ function calculate_recorded()
 end
 
 function calculate_recorded_update()
+	if enabled == false then
+		return
+	end
 	is_calculating = false
 	obs.timer_remove(calculate_recorded_update)
 	for filepath, info in pairs(calculating) do
 		local pending = false
 		if info then
-			if info.source then
+			if info.source ~= nil then
 				-- try to read the duration
 				duration = obs.obs_source_media_get_duration(info.source)
 				if duration > 0 or info.attempts > 4 then
@@ -311,6 +343,35 @@ function is_file_video(filename)
 		end
 	end
 	return false
+end
+
+function remove_all()
+	local scenes = obs.obs_frontend_get_scenes()
+	for k, scene_source in pairs(scenes) do
+		local scene = obs.obs_scene_from_source(scene_source)
+		if scene ~= nil then
+			local scene_items = obs.obs_scene_enum_items(scene)
+			for j, scene_item in pairs(scene_items) do
+				local item_source = obs.obs_sceneitem_get_source(scene_item)
+				if item_source ~= nil then
+					local item_name = obs.obs_source_get_name(item_source)
+					if item_name == SOURCE_NAME then
+						obs.obs_sceneitem_remove(scene_item)
+					end
+				end
+			end
+		end
+	end
+	obs.source_list_release(scenes)
+end
+
+function on_exit()
+	is_recording = false
+	enabled = false
+	has_exited = true
+	obs.timer_remove(timer_callback)
+	obs.timer_remove(calculate_recorded_update)
+	obs.obs_frontend_remove_event_callback(on_event)
 end
 
 function load_config()
