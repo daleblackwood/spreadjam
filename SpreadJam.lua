@@ -22,6 +22,7 @@ SIZE_SMALL		= 75
 SIZE_MEDIUM		= 100
 SIZE_LARGE		= 150
 SIZE_HUGE		= 200
+FREE_JAM		= 99
 
 duration_hours  = 24;
 seconds_count = 0
@@ -49,7 +50,8 @@ local description = [[
 	<h2>]] .. APP_NAME .. [[ ]] .. APP_VERSION .. [[</h2>
 	<h4>By Dale Blackwood</h4>
 <p>Counts video footage for a gamejam until the limit is reached.</p>
-<p><a href='https://github.com/daleblackwood/spreadjam'>Rules and Information</a></p>
+<p><a href='https://github.com/daleblackwood/spreadjam/blob/main/README.md'>Information</a></p>
+<p><a href='https://github.com/daleblackwood/spreadjam/blob/main/SpreadJam.md'>SpreadJam Rules</a></p>
 </center>
 ]]
 
@@ -71,13 +73,16 @@ function update_display()
 		return
 	end
 
+	local is_freejam = duration_hours == FREE_JAM
+
 	-- calculate display seconds
 	local seconds_recorded = 0
 	for k, duration in pairs(durations) do
 		seconds_recorded = seconds_recorded + duration
 	end
 	timer_seconds = seconds_count + seconds_recorded
-	if count_down then
+	local should_count_down = count_down or not is_freejam
+	if should_count_down then
 		timer_seconds = seconds_total - timer_seconds
 	end
 
@@ -88,11 +93,19 @@ function update_display()
 	local t_minutes     = math.floor(total_minutes % 60)
 	local t_hours       = math.floor(total_minutes / 60)
 	local t_prefix 	    = string.format(TEXT_PREFIX, duration_hours)
+	if is_freejam then
+		t_prefix = ""
+	end
+
 	if output_path == nil then
 		text = t_prefix .. "Error: Please set recording output path."
 	elseif seconds_count == 0 and seconds_recorded == 0 then
-		text = t_prefix  .. duration_hours .. ":00:00"	
-	elseif timer_seconds >= seconds_total then
+		local hour_str = "0"
+		if should_count_down then
+			hour_str = duration_hours
+		end
+		text = t_prefix .. hour_str .. ":00:00"	
+	elseif timer_seconds >= seconds_total and not is_freejam then
         text = t_prefix .. "■   TIME!"	
 	else
 		text = t_prefix .. string.format("%02d:%02d:%02d", t_hours, t_minutes, t_seconds)
@@ -179,9 +192,11 @@ function script_properties()
 	local props = obs.obs_properties_create()
 
     local o_hours = obs.obs_properties_add_list(props, "hours", "Jam Hours", obs.OBS_COMBO_TYPE_LIST, obs.OBS_COMBO_FORMAT_INT)
-	obs.obs_property_list_add_int(o_hours, "Full 24 Hour", 24)
-    obs.obs_property_list_add_int(o_hours, "Mini 12 Hour", 12)
-    obs.obs_property_list_add_int(o_hours, "Prep 6 Hour", 6)
+	obs.obs_property_list_add_int(o_hours, "24 Hour Spreadjam", 24)
+    obs.obs_property_list_add_int(o_hours, "12 Hour HalfJam", 12)
+    obs.obs_property_list_add_int(o_hours, "8 Hour Proto", 8)
+    obs.obs_property_list_add_int(o_hours, "6 Hour Proto", 6)
+    obs.obs_property_list_add_int(o_hours, "FreeJam", FREE_JAM)
 
 	local o_align_h = obs.obs_properties_add_list(props, "align_h", "Position Horizontal", obs.OBS_COMBO_TYPE_LIST, obs.OBS_COMBO_FORMAT_INT)
 	obs.obs_property_list_add_int(o_align_h, "Left", ALIGN_LEFT)

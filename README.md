@@ -1,60 +1,18 @@
-# SpreadJam
-*A jam which spreads the development, not the developer.*
+# SpreadJam Timer
+*Count up or down cumulative game jam footage - especially for SpreadJams.*
 
+The **SpreadJam Timer** is a tool for assisting in conducting a SpreadJam game jam or tracking production of a prototype.
 
-**SpreadJam** comes as a ruleset for a game making challenge and a utility for OBS that, when combined, allow for a game making challenge to be spread-out over multiple sittings.
+**This tool can be used to:**
+ - Take part in [SpreadJam](./SpreadJam.md) game jams
+ - Time the production of 6, 8 or 12 hour prototypes
+ - Count accumulated OBS footage
 
+The tool calculates the total duration of OBS ouput, and adds the current recording time (giving you a running total of recorded footage) and displays it in the corner of your OBS footage.
 
-## What is a SpreadJam?
+## What is SpeadJam?
 
-A SpreadJam is a game jam taken over multiple sittings. Unlike the popular and traditional 48 hour game jams (like the Ludam Dare or the GMTK Jam), SpreadJams are not contigious and allow free time for time away from game production - time for ideation, experimentation, eating, sleeping, a day job - whatever you like.
-
-As a trade off, the total number of hours in a SpreadJam is half that of a traditional challenge, running at 24 just hours. For a developer with a relaxed mind and all the time in the world to ponder and experiment, that should be enough to get an idea going.
-
-In order to do a SpreadJam, grab the tools here and follow the rules below. Anyone can do it at any time as much as they want.
-
-
-## Why is a SpreadJam?
-
-Game jams can be a lot of fun but the commitment can be daunting and the endless, sleepless rush can promote crunch, a practice the games industry is already too comfortable with. SpreadJams are a way for busy or conscientious developers to join in on the fun responsibly, at their own pace.
-
-Or perhaps it's just a convenient way to timebox prototypes. Regulation and time contraints can lead to interesting ideas and trade-offs.
-
-
-## SpreadJam Rules
-
-### 24 hours - Split 'em how you like 'em
-
-- A SpreadJam game is a game made over several screen-recorded sessions whose total footage does not exceed 24 hours.
-- The entireity of the game must be completed within the alotted time.
-
-### What goes on in SpreadJam, stays in SpreadJam
-
-- All assets and code must be produced within the challenge.
-    - Game engines are allowed
-    - Generalized asset creation or generation tools are allowed (sfxer, Blender, Houdini, etc...) so long as they are not built specifically for your game prior to jam time.
-    - Ready-made models / music / art and code are not allowed
-- The author(s) can have as much time away from recording and as they wish, and break the challenge into as many segments as they wish so long as no active development is undertaken away from the screen recordings.
-- Any design or production artefacts created away from computer must also be recorded as video and added to the total pool, taking from the total duration of the challenge.
-    - These videos do not need to display a timer
-    - This footage must be unbroken and show all working.
-
-### What goes on elsewhere, stays elsewhere
-
-- Experiments may be conducted, or recorded ideation performed (writing/drawing/coding/practicing) outside of SpreadJam project development so long as:
-    - No artefacts from the SpreadJam project are used to conduct the experiments or ideation
-    - No artefacts from the experiments or ideation are brought back into the SpreadJam project
-    - No experiments or ideation are used as reference during the production of the SpreadJam game
-
-### You can jam with a mate, but it'll cost you
-
-- Any work contributed from other developers must take hours from, and contribute footage to, the same time and footage pool as the project lead. This footage must follow the same rules as off-screen artefacts. (Unbroken, show all working.)
-
-### The Tools enforce the rules
-- The whole development of the SpreadJam project must be recorded with a timer visible on screen:
-    - The timer must display the total duration of the cumulative footage of the project's development.
-    - The timer must be visible in all screen-recorded videos.
-- It's best to use this tool and OBS or build one that works in an identical fashion.
+**SpreadJam** comes as a ruleset for a game making challenge and this utility for OBS that, when combined, allow for a game making challenge to be spread-out over multiple sittings. [For information on conducting SpreadJam game jams check out this doc within this repository.](./SpreadJam.md)
 
 
 ## Getting Started
