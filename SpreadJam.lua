@@ -74,6 +74,7 @@ function update_display()
 	end
 
 	local is_freejam = duration_hours == FREE_JAM
+	local should_count_down = count_down and not is_freejam
 
 	-- calculate display seconds
 	local seconds_recorded = 0
@@ -81,7 +82,6 @@ function update_display()
 		seconds_recorded = seconds_recorded + duration
 	end
 	timer_seconds = seconds_count + seconds_recorded
-	local should_count_down = count_down or not is_freejam
 	if should_count_down then
 		timer_seconds = seconds_total - timer_seconds
 	end
