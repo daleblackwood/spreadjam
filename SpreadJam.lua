@@ -231,6 +231,7 @@ function script_update(settings)
 	count_down = obs.obs_data_get_bool(settings, "count_down")
 	enabled = obs.obs_data_get_bool(settings, "enabled")
 	auto_add = obs.obs_data_get_bool(settings, "auto_add")
+	calculate_recorded()
 	update_display()
 end
 
@@ -287,8 +288,14 @@ function on_event(e)
 end
 
 function calculate_recorded()
-	is_calculating = true
+	if is_calculating then
+		return
+	end
+	is_calculating = true	
+	load_config()
 	local dir = obs.os_opendir(output_path)
+	print("calculating recorded footage for " .. output_path)
+	local files = {}
 	local entry
 	repeat
 		entry = obs.os_readdir(dir)
@@ -297,10 +304,21 @@ function calculate_recorded()
 			local filepath = output_path .. "/" .. filename
 			if is_file_video(filename) then
 				calculating[filepath] = { attempts = 0 }
+				files[filepath] = true
 			end
 		end
 	until not entry
 	obs.os_closedir(dir)
+	for k,v in pairs(calculating) do
+		if files[k] == nil then
+			calculating[k] = nil
+		end
+	end
+	for k,v in pairs(durations) do
+		if files[k] == nil then
+			durations[k] = nil
+		end
+	end
 	calculate_recorded_update()
 end
 
@@ -378,6 +396,7 @@ function remove_all()
 		end
 	end
 	obs.source_list_release(scenes)
+	calculating = nil
 end
 
 function on_exit()
