@@ -9,7 +9,7 @@ Reasearch:
 ]]
 obs             = obslua
 APP_NAME        = "SpreadJam"
-APP_VERSION     = "1.0.0"
+APP_VERSION     = "1.1.0"
 SOURCE_NAME 	= "SpreadJam"
 TEXT_PREFIX		= "SJ%d  "
 VID_EXTS		= {"mp4", "mpg", "mkv", "m4v", "mov"}
@@ -142,36 +142,41 @@ function update_display()
 
 	-- confirm or add to scene
 	local scene_source = obs.obs_frontend_get_current_scene()
-	local scene = obs.obs_scene_from_source(scene_source)
-	local scene_item = obs.obs_scene_sceneitem_from_source(scene, source)
-	if scene_item == nil and auto_add then
-		scene_item = obs.obs_scene_add(scene, source)
+	if scene_source ~= nil then
+		local scene = obs.obs_scene_from_source(scene_source)
+		local scene_item = obs.obs_scene_sceneitem_from_source(scene, source)
+		if scene_item == nil and auto_add then
+			scene_item = obs.obs_scene_add(scene, source)
+		end
+
+		if scene_item ~= nil then
+			-- position
+			obs.obs_sceneitem_set_order(scene_item, obs.OBS_ORDER_MOVE_TOP)
+			obs.obs_sceneitem_set_locked(scene_item, true)
+			obs.obs_sceneitem_set_alignment(scene_item, bit.bor(align_h, align_v))
+			local pos = obs.vec2()
+			local pad = math.ceil(dim_min * 0.03)
+			local posx = pad
+			if align_h == ALIGN_CENTER then
+				posx = dim_width * 0.5
+			elseif align_h == ALIGN_RIGHT then
+				posx = dim_width - pad
+			end
+			local posy = pad
+			if align_v == ALIGN_CENTER then
+				posy = dim_height * 0.5
+			elseif align_v == ALIGN_BOTTOM then
+				posy = dim_height - pad
+			end
+			obs.vec2_set(pos, posx, posy)
+			obs.obs_sceneitem_set_pos(scene_item, pos)
+		end
+
+		-- release scene source
+		obs.obs_source_release(scene_source)
 	end
 
-	if scene_item ~= nil then
-		-- position
-		obs.obs_sceneitem_set_order(scene_item, obs.OBS_ORDER_MOVE_TOP)
-		obs.obs_sceneitem_set_locked(scene_item, true)
-		obs.obs_sceneitem_set_alignment(scene_item, bit.bor(align_h, align_v))
-		local pos = obs.vec2()
-		local pad = math.ceil(dim_min * 0.03)
-		local posx = pad
-		if align_h == ALIGN_CENTER then
-			posx = dim_width * 0.5
-		elseif align_h == ALIGN_RIGHT then
-			posx = dim_width - pad
-		end
-		local posy = pad
-		if align_v == ALIGN_CENTER then
-			posy = dim_height * 0.5
-		elseif align_v == ALIGN_BOTTOM then
-			posy = dim_height - pad
-		end
-		obs.vec2_set(pos, posx, posy)
-		obs.obs_sceneitem_set_pos(scene_item, pos)
-	end
-
-	-- release
+	-- release sources and data
 	if source ~= nil then
 		obs.obs_source_release(source)
 	end
@@ -269,6 +274,7 @@ end
 function script_load(settings)
 	obs.obs_frontend_add_event_callback(on_event)
 	load_config()
+	calculate_recorded()
 	update_display()
 end
 
@@ -282,8 +288,6 @@ function on_event(e)
 	elseif e == obs.OBS_FRONTEND_EVENT_PROFILE_CHANGED then
 		load_config()
 		update_display()
-	elseif e == obs.OBS_FRONTEND_EVENT_EXIT then
-		on_exit()
 	end
 end
 
@@ -294,7 +298,7 @@ function calculate_recorded()
 	is_calculating = true	
 	load_config()
 	local dir = obs.os_opendir(output_path)
-	print("calculating recorded footage for " .. output_path)
+	print("SJ: calculating recorded footage for " .. output_path)
 	local files = {}
 	local entry
 	repeat
@@ -327,17 +331,32 @@ function calculate_recorded_update()
 		return
 	end
 	is_calculating = false
+	
+    if calculating == nil then
+		return
+	end 
+
 	obs.timer_remove(calculate_recorded_update)
 	for filepath, info in pairs(calculating) do
 		local pending = false
 		if info then
 			if info.source ~= nil then
 				-- try to read the duration
-				duration = obs.obs_source_media_get_duration(info.source)
-				if duration > 0 or info.attempts > 4 then
+				local duration = obs.obs_source_media_get_duration(info.source)
+				local failed = info.attempts >= 5
+				if duration > 0 or failed then
+					if failed then
+						duration = 0
+					end
 					obs.obs_source_release(info.source)
 					info.source = nil
-					durations[filepath] = duration / 1000
+					if duration > 0 then
+						duration = duration / 1000
+						print("SJ: duration for " .. filepath .. " is " .. duration .. "s")
+					else
+						print("SJ: duration failed for " .. filepath)
+					end
+					durations[filepath] = duration
 					calculating[filepath] = nil
 				else
 					info.attempts = info.attempts + 1
@@ -359,6 +378,12 @@ function calculate_recorded_update()
 			is_calculating = true
 			obs.timer_add(calculate_recorded_update, 10)
 			return
+		else
+			local total_duration = 0
+			for k, duration in pairs(durations) do
+				total_duration = total_duration + duration
+			end
+			print("SJ: total duration is " .. total_duration .. "s")
 		end
 	end
 end
@@ -393,38 +418,29 @@ function remove_all()
 					end
 				end
 			end
+			scenes[k] = nil
 		end
 	end
 	obs.source_list_release(scenes)
 	calculating = nil
 end
 
-function on_exit()
-	is_recording = false
-	enabled = false
-	has_exited = true
-	obs.timer_remove(timer_callback)
-	obs.timer_remove(calculate_recorded_update)
-	obs.obs_frontend_remove_event_callback(on_event)
-end
-
 function load_config()
 	config = {}
 	local profile = obs.obs_frontend_get_current_profile():gsub("[^%w_ ]", ""):gsub("%s", "_");
 	local profile_relative_path = "obs-studio\\basic\\profiles\\" .. profile .. "\\basic.ini";
-	-- char dst[512];
 	local profile_path = "                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                ";
 	obs.os_get_abs_path("..\\..\\config\\" .. profile_relative_path, profile_path, #profile_path);
 	if not obs.os_file_exists(profile_path) then	
 		obs.os_get_config_path(profile_path, #profile_path, profile_relative_path);
 		if not obs.os_file_exists(profile_path) then	
-			print("Config file not found.");
+			print("SJ: config file not found.");
 			return;
 		end
 	end
 	local config_text = obs.os_quick_read_utf8_file(profile_path);
 	if config_text == nil then 
-		print("Couldn't read config file.");
+		print("SJ: couldn't read config file.");
 		return;
 	end
 	local section;
