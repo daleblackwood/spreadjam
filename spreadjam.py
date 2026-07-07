@@ -27,7 +27,7 @@ class SpreadJamApp:
     def __init__(self, root):
         self.root = root
         self.root.title(f"{APP_NAME} {APP_VERSION}")
-        self.root.geometry("400x310")
+        self.root.geometry("400x350")
         self.root.config(bg=BG_MAIN)
         self.root.resizable(False, False)
         
@@ -122,6 +122,9 @@ class SpreadJamApp:
         
         self.browse_btn = tk.Label(self.config_frame, text="Browse", bg=BG_SUB, fg=FG_MAIN, bd=0, highlightthickness=1, highlightbackground="#444444", padx=6, pady=2, relief="flat")
         self.browse_btn.grid(row=1, column=3, padx=(2, 0))
+        
+        self.main_timer_label = tk.Label(self.options_frame, text="", font=("Arial", 12, "bold"), bg=BG_MAIN, fg=FG_MAIN)
+        self.main_timer_label.pack(pady=10)
         
         self.root.bind("<Button-1>", self.start_drag)
         self.root.bind("<B1-Motion>", self.do_drag)
@@ -358,8 +361,8 @@ class SpreadJamApp:
         sw = self.root.winfo_screenwidth()
         sh = self.root.winfo_screenheight()
         x = (sw - 400) // 2
-        y = (sh - 310) // 2
-        self.root.geometry(f"400x310+{x}+{y}")
+        y = (sh - 350) // 2
+        self.root.geometry(f"400x350+{x}+{y}")
         
         threading.Thread(target=self.calculate_recorded_folder, daemon=True).start()
 
@@ -380,8 +383,7 @@ class SpreadJamApp:
             else:
                 self.seconds_count += 1
                 
-            self.update_display()
-            
+        self.update_display()
         self.root.after(1000, self.update_loop)
 
     def update_display(self):
@@ -418,6 +420,11 @@ class SpreadJamApp:
                 
         if hasattr(self, 'timer_label'):
             self.timer_label.config(text=text)
+        if hasattr(self, 'main_timer_label'):
+            if self.connected:
+                self.main_timer_label.config(text=text)
+            else:
+                self.main_timer_label.config(text="")
 
     def on_close(self):
         self.disconnect_obs()
